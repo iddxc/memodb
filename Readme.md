@@ -3,7 +3,7 @@
 
 特点:
 - 支持任意类型
-- 支持高并发
+- 支持并发操作
 - 支持视图字符串输出
 - 支持过期删除，单位为秒
 - 支持周期快照存储，json字符串压缩文件
@@ -12,8 +12,8 @@
 ## 导入与使用
 
 ### 导入的两种方式
-- 使用go命令`go get "github.com/iddxc/MemoDB"` 
-- 使用在源代码中使用`import "github.com/iddxc/MemoDB"`进行导入，并运行`go mod tidy`进行环境管理
+- 使用go命令`go get "github.com/iddxc/memodb"` 
+- 使用在源代码中使用`import "github.com/iddxc/memodb"`进行导入，并运行`go mod tidy`进行环境管理
 
 ### 启用快照和过期删除功能
 ```go
