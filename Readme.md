@@ -15,6 +15,33 @@
 - 使用go命令`go get "github.com/iddxc/MemoDB"` 
 - 使用在源代码中使用`import "github.com/iddxc/MemoDB"`进行导入，并运行`go mod tidy`进行环境管理
 
+### 启用快照和过期删除功能
+```go
+package main
+
+import (
+	"github.com/iddxc/memodb"
+)
+
+func main() {
+	store := memodb.New("test.db", 20)
+	count := 1000
+
+	rand.Seed(time.Now().Unix())
+	for i := 0; i < count; i++ {
+		r := rand.Intn(100)
+		store.Put(strconv.Itoa(i), r)
+		store.Expire(strconv.Itoa(i), r)
+	}
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go store.Run()
+	defer wait.Wait()
+
+	fmt.Println(store.View(10))
+}
+```
+该功能做到每20秒进行快照存储1次,并且对存在过期时间限制元素进行判断
 
 ### String
 String: key-value key为字符串类型且为唯一，而value可以为任意类型，支持过期删除 
