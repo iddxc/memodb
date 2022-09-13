@@ -38,7 +38,7 @@ func main() {
 	go store.Run()
 	defer wait.Wait()
 
-	fmt.Println(store.View(10))
+	fmt.Println(store.Raw()) // 打印解压后原数据,json字符串
 }
 ```
 该功能做到每20秒进行快照存储1次,并且对存在过期时间限制元素进行判断

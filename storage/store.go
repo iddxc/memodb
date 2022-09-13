@@ -182,3 +182,11 @@ func (s *Store) LClear(table string) { s.List.clear(table) }
 func (s *Store) LGetTables() []string { return s.List.getTables() }
 
 func (s *Store) Dumps() { s.dumps() }
+
+func (s *Store) Raw() string {
+	content, err := json.Marshal(&s)
+	if err != nil {
+		fmt.Println("序列化原数据错误:", err)
+	}
+	return string(content)
+}
