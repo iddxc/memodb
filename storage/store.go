@@ -101,18 +101,23 @@ func (s *Store) addExpire(mode, table, key string, index, timeout int) {
 	s.ExpireStore.Bag[table][key] = cur
 }
 
-func (s *Store) watch() {
-	for _, node := range s.ExpireStore.Nodes {
-		if node.TimeStamp <= time.Now().Unix() {
-			switch node.Mode {
-			case "dict":
-				s.DRemove(node.Table, node.Key)
-			case "string":
-				s.Remove(node.Key)
+func (s *Store) watch(table, key string) {
+	if tb, ok := s.ExpireStore.Bag[table]; ok {
+		if itemIndex, ok := tb[key]; ok {
+			now := time.Now().Unix()
+			node := s.ExpireStore.Nodes[itemIndex]
+			if node.TimeStamp <= now {
+				switch node.Mode {
+				case "dict":
+					s.DRemove(node.Table, node.Key)
+				case "string":
+					s.Remove(node.Key)
+				}
+				delete(s.ExpireStore.Bag[table], key)
+				s.ExpireStore.Nodes[itemIndex] = nil
 			}
 		}
 	}
-	wg.Done()
 }
 
 func (s *Store) flush() {
@@ -129,8 +134,7 @@ func (s *Store) flush() {
 
 func (s *Store) Run() {
 	for {
-		wg.Add(2)
-		go s.watch()
+		wg.Add(1)
 		go s.flush()
 		wg.Wait()
 		time.Sleep(time.Second)
@@ -140,39 +144,82 @@ func (s *Store) Run() {
 
 func (s *Store) Put(key string, value interface{}) { s.String.put(key, value) }
 
-func (s *Store) Get(key string) (interface{}, bool) { return s.String.get(key) }
+func (s *Store) Get(key string) (interface{}, bool) {
+	s.watch("", key)
+	return s.String.get(key)
+}
 
 func (s *Store) Remove(key string) { s.String.remove(key) }
 
 func (s *Store) Len() int { return s.String.len() }
 
-func (s *Store) GetKeys() []string { return s.String.getKeys() }
+func (s *Store) GetKeys() []string {
+	keys := s.String.getKeys()
+	for _, key := range keys {
+		s.watch("", key)
+	}
 
-func (s *Store) View(amount int) string { return s.String.view(amount) }
+	return s.String.getKeys()
+}
+
+func (s *Store) View(amount int) string {
+	for _, k := range s.String.getKeys() {
+		s.watch("", k)
+	}
+	return s.String.view(amount)
+}
 
 func (s *Store) Clear() { s.String.clear() }
 
-func (s *Store) Exists(key string) bool { return s.String.exists(key) }
+func (s *Store) Exists(key string) bool {
+	for _, k := range s.String.getKeys() {
+		s.watch("", k)
+	}
+	return s.String.exists(key)
+}
 
 func (s *Store) Expire(key string, timeout int) { s.addExpire("string", "", key, 0, timeout) }
 
 func (s *Store) DPut(table, key string, value interface{}) { s.Dict.put(table, key, value) }
 
-func (s *Store) DGet(table, key string) (interface{}, bool) { return s.Dict.get(table, key) }
+func (s *Store) DGet(table, key string) (interface{}, bool) {
+	s.watch(table, key)
+	return s.Dict.get(table, key)
+}
 
 func (s *Store) DRemove(table, key string) { s.Dict.remove(table, key) }
 
 func (s *Store) DClear(table string) { s.Dict.clear(table) }
 
-func (s *Store) DLen(table string) int { return s.Dict.len(table) }
+func (s *Store) DLen(table string) int {
+	for _, key := range s.Dict.getKeys(table) {
+		s.watch(table, key)
+	}
+	return s.Dict.len(table)
+}
 
-func (s *Store) DGetKeys(table string) []string { return s.Dict.getKeys(table) }
+func (s *Store) DGetKeys(table string) []string {
+	for _, key := range s.Dict.getKeys(table) {
+		s.watch(table, key)
+	}
+	return s.Dict.getKeys(table)
+}
 
-func (s *Store) DView(table string, amount int) string { return s.Dict.view(table, amount) }
+func (s *Store) DView(table string, amount int) string {
+	for _, key := range s.Dict.getKeys(table) {
+		s.watch(table, key)
+	}
+	return s.Dict.view(table, amount)
+}
 
 func (s *Store) HasTable(table string) bool { return s.Dict.hasTable(table) }
 
-func (s *Store) DExists(table string, key string) bool { return s.Dict.exists(table, key) }
+func (s *Store) DExists(table string, key string) bool {
+	for _, key := range s.Dict.getKeys(table) {
+		s.watch(table, key)
+	}
+	return s.Dict.exists(table, key)
+}
 
 func (s *Store) DGetTables() []string { return s.Dict.getTables() }
 
@@ -199,6 +246,11 @@ func (s *Store) LGetTables() []string { return s.List.getTables() }
 func (s *Store) Dumps() { s.dumps() }
 
 func (s *Store) Raw() string {
+	s.Len()
+	for _, table := range s.DGetTables() {
+		s.DLen(table)
+	}
+
 	content, err := json.Marshal(&s)
 	if err != nil {
 		fmt.Println("序列化原数据错误:", err)
