@@ -77,13 +77,28 @@ func (s *Store) loads() error {
 }
 
 func (s *Store) addExpire(mode, table, key string, index, timeout int) {
-	s.ExpireStore.Nodes = append(s.ExpireStore.Nodes, &ExpireNode{
+	cur := len(s.ExpireStore.Nodes)
+	for i, item := range s.ExpireStore.Nodes {
+		if item == nil {
+			cur = i
+		}
+	}
+	node := &ExpireNode{
 		Mode:      mode,
 		Table:     table,
 		Key:       key,
 		Index:     index,
 		TimeStamp: int64(timeout) + time.Now().Unix(),
-	})
+	}
+	if cur == len(s.ExpireStore.Nodes) {
+		s.ExpireStore.Nodes = append(s.ExpireStore.Nodes, node)
+	} else {
+		s.ExpireStore.Nodes[cur] = node
+	}
+	if _, ok := s.ExpireStore.Bag[table]; !ok {
+		s.ExpireStore.Bag[table] = make(map[string]int)
+	}
+	s.ExpireStore.Bag[table][key] = cur
 }
 
 func (s *Store) watch() {

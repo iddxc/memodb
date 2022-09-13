@@ -9,11 +9,13 @@ type ExpireNode struct {
 }
 
 type ExpireStore struct {
-	Nodes []*ExpireNode `json:"nodes"`
+	Nodes []*ExpireNode             `json:"nodes"`
+	Bag   map[string]map[string]int `json:"bag"`
 }
 
 func createExpireStore() *ExpireStore {
 	return &ExpireStore{
 		Nodes: make([]*ExpireNode, 0),
+		Bag:   make(map[string]map[string]int),
 	}
 }

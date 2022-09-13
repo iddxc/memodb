@@ -13,7 +13,7 @@ func TestStore(t *testing.T) {
 	fmt.Println(s)
 
 	rand.Seed(time.Now().Unix())
-	count := 10
+	count := 100
 	for i := 0; i < count; i++ {
 		s.LPut("test_list", strconv.Itoa(i))
 
