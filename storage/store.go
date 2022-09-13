@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -19,6 +20,8 @@ type Store struct {
 	List        *ListStore   `json:"list"`
 	Dict        *DictStore   `json:"dict"`
 	ExpireStore *ExpireStore `json:"expire"`
+	FlushTime   int64        `json:"flush_time"`
+	storeChan   chan *Store
 }
 
 func isExist(filename string) bool {
@@ -38,6 +41,7 @@ func InitStore(filename string, timePeriod int) *Store {
 	store := &Store{
 		location:   filename,
 		TimePeriod: timePeriod,
+		storeChan:  make(chan *Store, 10),
 	}
 	if stat {
 		store.loads()
@@ -47,6 +51,7 @@ func InitStore(filename string, timePeriod int) *Store {
 		store.String = createStringStore()
 		store.ExpireStore = createExpireStore()
 	}
+	store.FlushTime = time.Now().Unix() + int64(timePeriod)
 	return store
 }
 
@@ -82,45 +87,40 @@ func (s *Store) addExpire(mode, table, key string, index, timeout int) {
 }
 
 func (s *Store) watch() {
-	go func() {
-		for {
-			for _, node := range s.ExpireStore.Nodes {
-				if node.TimeStamp <= time.Now().Unix() {
-					switch node.Mode {
-					case "dict":
-						s.DRemove(node.Table, node.Key)
-					case "string":
-						s.Remove(node.Key)
-					}
-				}
+	for _, node := range s.ExpireStore.Nodes {
+		if node.TimeStamp <= time.Now().Unix() {
+			switch node.Mode {
+			case "dict":
+				s.DRemove(node.Table, node.Key)
+			case "string":
+				s.Remove(node.Key)
 			}
 		}
-	}()
+	}
+	wg.Done()
 }
 
 func (s *Store) flush() {
 	if s.TimePeriod > 0 {
-		storeChan := make(chan Store, 10)
-		storeChan <- *s
-		go func() {
-			sc := <-storeChan
-			cur := time.Now().Unix() + int64(sc.TimePeriod)
-			for {
-				if cur <= time.Now().Unix() {
-					s.dumps()
-					cur = time.Now().Unix() + int64(sc.TimePeriod)
-				}
-				time.Sleep(time.Second)
-			}
-		}()
+		s.storeChan <- s
+		sc := <-s.storeChan
+		if s.FlushTime <= time.Now().Unix() {
+			s.dumps()
+			s.FlushTime = time.Now().Unix() + int64(sc.TimePeriod)
+		}
 	}
+	wg.Done()
 }
 
 func (s *Store) Run() {
-	wg.Add(2)
-	go s.watch()
-	go s.flush()
-	wg.Wait()
+	for {
+		wg.Add(2)
+		go s.watch()
+		go s.flush()
+		wg.Wait()
+		time.Sleep(time.Second)
+		runtime.Gosched()
+	}
 }
 
 func (s *Store) Put(key string, value interface{}) { s.String.put(key, value) }
